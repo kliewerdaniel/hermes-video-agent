@@ -1,0 +1,6 @@
+#!/bin/sh
+# Wrapper: run the CLI through the project venv with a clean environment.
+# Some agent shells export PYTHONPATH/PYTHONHOME, which pulls another
+# interpreter's site-packages into this one and breaks imports.
+DIR=$(cd "$(dirname "$0")" && pwd)
+env -u PYTHONPATH -u PYTHONHOME "$DIR/.venv/bin/python" "$DIR/hva-cli.py" "$@"

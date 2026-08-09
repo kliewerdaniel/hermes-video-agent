@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #070709;
+  color: #ecedf2;
+}
+
+body {
+  /* restrained cinematic vignette — charcoal, not pure black, faint accent */
+  background-image:
+    radial-gradient(1200px 700px at 80% -10%, rgba(124, 106, 255, 0.07), transparent 55%),
+    radial-gradient(900px 600px at -5% 110%, rgba(70, 211, 154, 0.05), transparent 50%);
+  background-attachment: fixed;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2e2e3b #070709;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a36;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a48;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  /* raised panel — primary surface of the workspace */
+  .panel {
+    @apply bg-surface border border-edge rounded-xl;
+  }
+  .panel-2 {
+    @apply bg-panel border border-edge rounded-xl;
+  }
+  /* subtle inline control surface */
+  .inset {
+    @apply bg-panel/70 border border-edge rounded-lg;
+  }
+  .hair {
+    @apply border-edge;
+  }
+  /* technical/mono numerics (scene numbers, durations, timecodes) */
+  .mono {
+    @apply font-mono tabular-nums tracking-tight;
+  }
+  .label {
+    @apply text-2xs uppercase tracking-[0.14em] text-faint font-medium;
+  }
+  .input {
+    @apply bg-panel border border-edge rounded-lg px-3 py-2 text-sm text-text
+      outline-none transition-colors placeholder:text-faint
+      focus:border-primary/70 focus:bg-surface2;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .grain {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+    background-size: 3px 3px;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #14141c 25%, #1d1d28 37%, #14141c 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* keep native audio element compact but themed */
+audio {
+  height: 34px;
+}
+audio::-webkit-media-controls-panel {
+  background: #17171f;
+}

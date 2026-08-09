@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Hermes Video Agent</title>
+<style>
+:root{
+  --bg:#0e1013; --panel:#161a20; --panel2:#1c222a; --line:#272e38;
+  --ink:#e8ecf2; --ink2:#9aa6b6; --accent:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --radius:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+header{position:sticky;top:0;z-index:20;background:#0e1013ee;backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+h1{font-size:15px;margin:0;letter-spacing:.3px}
+.muted{color:var(--ink2)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+main{padding:20px;max-width:1280px;margin:0 auto}
+button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+  border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px}
+button:hover{border-color:#3b4553;background:#222a34}
+button.primary{background:var(--accent);color:#08210f;border-color:transparent;font-weight:600}
+button.ghost{background:transparent}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,textarea,select{background:#0f1319;color:var(--ink);border:1px solid var(--line);
+  border-radius:8px;padding:8px 10px;font:inherit;width:100%}
+textarea{min-height:140px;resize:vertical;line-height:1.6}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;margin-bottom:16px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pipeline{display:flex;gap:6px;flex-wrap:wrap}
+.pill{font-size:11px;padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:var(--ink2)}
+.pill.ok{border-color:var(--accent);color:var(--accent)}
+.pill.cur{border-color:var(--warn);color:var(--warn)}
+.scene{display:grid;grid-template-columns:280px 1fr;gap:18px;border-top:1px solid var(--line);padding:18px 0}
+.scene:first-of-type{border-top:none}
+.cands{display:flex;gap:10px;flex-wrap:wrap}
+.cand{width:170px;border:2px solid transparent;border-radius:8px;overflow:hidden;
+  background:#0f1319;cursor:pointer;position:relative}
+.cand.sel{border-color:var(--accent)}
+.cand img{width:100%;height:100px;object-fit:cover;display:block;background:#000}
+.cand .meta{padding:6px 7px;font-size:10.5px;color:var(--ink2);line-height:1.35}
+.badge{position:absolute;top:5px;left:5px;background:#000c;font-size:9.5px;padding:2px 6px;
+  border-radius:5px;color:#cde}
+.status{font-size:11px;padding:2px 8px;border-radius:99px}
+.needs_review{background:#3a2f12;color:var(--warn)}
+.approved{background:#123020;color:var(--accent)}
+.skipped{background:#2a2f36;color:var(--ink2)}
+.jobs{font-size:12px;color:var(--ink2)}
+.err{color:var(--bad)}
+video{width:100%;border-radius:8px;background:#000}
+a{color:#7dd3fc}
+label{font-size:11.5px;color:var(--ink2);display:block;margin:10px 0 4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Hermes Video Agent</h1>
+  <span class="mono muted" id="env">…</span>
+  <span style="flex:1"></span>
+  <select id="picker" style="width:280px"></select>
+  <button onclick="newProject()">+ New</button>
+  <span class="jobs" id="jobs"></span>
+</header>
+<main id="app">loading…</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let P = null, POLL = null;
+
+const api = async (path, opts={}) => {
+  const r = await fetch(path, {headers:{'Content-Type':'application/json'}, ...opts});
+  if (!r.ok) { const t = await r.text(); alert(`${r.status}: ${t.slice(0,400)}`); throw new Error(t); }
+  return r.json();
+};
+const post = (p, body) => api(p, {method:'POST', body: JSON.stringify(body||{})});
+const patch = (p, body) => api(p, {method:'PATCH', body: JSON.stringify(body||{})});
+
+async function boot(){
+  const e = await api('/api/env');
+  $('#env').textContent =
+    `llm:${e.llm?'up':'down'} · images:${e.image_provider} · tts:${e.tts_provider}`;
+  await refreshList();
+  pollJobs();
+}
+
+async function refreshList(select){
+  const {projects} = await api('/api/projects');
+  const sel = $('#picker');
+  sel.innerHTML = projects.map(p =>
+    `<option value="${p.id}">${p.title||p.id} — ${p.stage} (${p.scenes} scenes)</option>`).join('')
+    || '<option value="">no projects yet</option>';
+  const target = select || (P && P.id) || (projects[0] && projects[0].id);
+  if (target){ sel.value = target; await load(target); } else { $('#app').innerHTML = intro(); }
+  sel.onchange = () => load(sel.value);
+}
+
+async function newProject(){
+  const idea = prompt('What is the video about?');
+  if (!idea) return;
+  const dur = parseInt(prompt('Target duration in seconds', '45') || '45', 10);
+  const p = await post('/api/projects', {idea, duration: dur, aspect: '16:9'});
+  await refreshList(p.id);
+}
+
+async function load(id){ P = await api('/api/projects/'+id); render(); }
+const reload = () => load(P.id);
+
+function intro(){
+  return `<div class="card"><h2>No project yet</h2>
+  <p class="muted">Create one, then walk the stages. Every stage is reviewable and
+  every stage can be reopened.</p></div>`;
+}
+
+function pipeline(){
+  return P.stages.map(s => {
+    const cls = P.approvals[s] ? 'ok' : (P.stage===s ? 'cur' : '');
+    return `<span class="pill ${cls}" onclick="reopen('${s}')" title="click to reopen from here">${s}</span>`;
+  }).join('');
+}
+
+async function reopen(stage){
+  if (!P.approvals[stage]) return;
+  if (!confirm(`Reopen from '${stage}'? Later approvals are cleared (files are kept).`)) return;
+  P = await post(`/api/projects/${P.id}/reopen/${stage}`); render();
+}
+
+const approve = async s => { P = await post(`/api/projects/${P.id}/approve/${s}`); render(); };
+
+function render(){
+  const f = p => `/api/projects/${P.id}/file/${p}`;
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="row"><strong>${P.title||P.id}</strong>
+      <span class="mono muted">${P.id}</span>
+      <span class="mono muted">${P.aspect} · ${P.total_duration.toFixed(1)}s · ${P.scenes.length} scenes</span></div>
+    <div class="pipeline" style="margin-top:10px">${pipeline()}</div>
+    <p class="muted" style="margin:8px 0 0">Idea: ${P.idea}</p>
+  </div>
+
+  <div class="card">
+    <div class="row"><strong>1 · Script</strong>
+      <button onclick="genScript()">${P.script?'Regenerate':'Generate'} with LLM</button>
+      <button onclick="saveScript()">Save edits</button>
+      ${P.script && !P.approvals.script ? `<button class="primary" onclick="approve('script')">Approve script →</button>`:''}
+      ${P.approvals.script?'<span class="pill ok">approved</span>':''}</div>
+    <textarea id="script" placeholder="Paste your own script here, or generate one.">${P.script||''}</textarea>
+  </div>
+
+  <div class="card">
+    <div class="row"><strong>2 · Scenes</strong>
+      <button ${P.approvals.script?'':'disabled'} onclick="storyboard()">Build shot list</button>
+      <input id="nscenes" type="number" value="${P.scenes.length||7}" style="width:80px" title="scene count"/>
+      ${P.scenes.length && !P.approvals.scenes ? `<button class="primary" onclick="approve('scenes')">Approve scenes →</button>`:''}
+      ${P.approvals.scenes?'<span class="pill ok">approved</span>':''}</div>
+  </div>
+
+  <div class="card">
+    <div class="row"><strong>3 · Visuals</strong>
+      <button ${P.approvals.scenes?'':'disabled'} onclick="researchAll()">Research all scenes</button>
+      ${P.scenes.some(s=>s.candidates.length) && !P.approvals.visuals ? `<button class="primary" onclick="approve('visuals')">Approve visuals →</button>`:''}
+      ${P.approvals.visuals?'<span class="pill ok">approved</span>':''}</div>
+    ${P.scenes.map(sceneCard).join('')}
+  </div>
+
+  <div class="card">
+    <div class="row"><strong>4 · Narration</strong>
+      <button ${P.approvals.visuals?'':'disabled'} onclick="narrate()">Render narration</button>
+      ${P.scenes.some(s=>s.audio_path) && !P.approvals.narration ? `<button class="primary" onclick="approve('narration')">Approve narration →</button>`:''}
+      ${P.approvals.narration?'<span class="pill ok">approved</span>':''}</div>
+    <div class="muted" style="margin-top:8px">Durations below are measured from the rendered audio.</div>
+  </div>
+
+  <div class="card">
+    <div class="row"><strong>5 · Video</strong>
+      <button ${P.approvals.narration?'':'disabled'} onclick="build(false)">Render draft</button>
+      <button ${P.approvals.draft?'':'disabled'} onclick="build(true)">Render final</button>
+      ${P.has_draft && !P.approvals.draft ? `<button class="primary" onclick="approve('draft')">Approve draft →</button>`:''}
+      ${P.has_final?'<span class="pill ok">final rendered</span>':''}</div>
+    <div class="grid2" style="margin-top:12px">
+      ${P.has_draft?`<div><label>draft.mp4</label><video controls src="${f(P.draft)}?t=${Date.now()}"></video></div>`:''}
+      ${P.has_final?`<div><label>final.mp4</label><video controls src="${f(P.final)}?t=${Date.now()}"></video></div>`:''}
+    </div>
+    ${P.has_draft?`<p class="mono muted" style="margin-top:10px">
+      <a href="${f('captions/captions.srt')}">captions.srt</a> ·
+      <a href="${f('captions/captions.vtt')}">captions.vtt</a> ·
+      <a href="${f('CREDITS.md')}">CREDITS.md</a> ·
+      <a href="${f('project.json')}">project.json</a></p>`:''}
+  </div>`;
+}
+
+function sceneCard(s){
+  const f = p => `/api/projects/${P.id}/file/${p}`;
+  return `<div class="scene">
+    <div>
+      <div class="row"><strong class="mono">${s.id}</strong>
+        <span class="status ${s.status}">${s.status}</span>
+        <span class="mono muted">${s.duration.toFixed(2)}s</span></div>
+      <label>narration</label>
+      <textarea style="min-height:80px" onchange="editScene('${s.id}',{narration:this.value})">${s.narration}</textarea>
+      <label>visual concept</label>
+      <textarea style="min-height:60px" onchange="editScene('${s.id}',{visual_concept:this.value})">${s.visual_concept||''}</textarea>
+      <label>search terms (comma separated)</label>
+      <input value="${(s.search_terms||[]).join(', ')}"
+        onchange="editScene('${s.id}',{search_terms:this.value.split(',').map(x=>x.trim()).filter(Boolean)})"/>
+      <label>image prompt (for generation)</label>
+      <textarea style="min-height:60px" onchange="editScene('${s.id}',{image_prompt:this.value})">${s.image_prompt||''}</textarea>
+      ${s.audio_path?`<label>narration audio</label>
+        <audio controls style="width:100%" src="${f(s.audio_path)}?t=${Date.now()}"></audio>`:''}
+    </div>
+    <div>
+      <div class="cands">
+        ${s.candidates.map(c => `
+          <div class="cand ${c.id===s.selected?'sel':''}" onclick="pick('${s.id}','${c.id}')">
+            <span class="badge">${c.provider||'?'}</span>
+            <img loading="lazy" src="${f(c.thumb_path||c.local_path)}"/>
+            <div class="meta">
+              <div>${(c.title||'untitled').slice(0,58)}</div>
+              <div>${c.license||'—'} ${c.width}×${c.height}</div>
+              ${c.source_url?`<a href="${c.source_url}" target="_blank" rel="noopener">source ↗</a>`:''}
+            </div>
+          </div>`).join('') || '<span class="muted">no candidates yet</span>'}
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button onclick="researchOne('${s.id}')">Search again</button>
+        <button onclick="researchQuery('${s.id}')">Search for…</button>
+        <button onclick="genImage('${s.id}')">Generate image</button>
+        <button onclick="uploadFor('${s.id}')">Upload my own</button>
+        <button onclick="replan('${s.id}')">Ask for a different idea</button>
+        <button class="ghost" onclick="skipScene('${s.id}')">Skip visual</button>
+        ${s.selected?`<button class="primary" onclick="pick('${s.id}','${s.selected}')">Approve this shot</button>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+const editScene = async (sid, body) => { P = await patch(`/api/projects/${P.id}/scenes/${sid}`, body); };
+const pick = async (sid, cid) => { P = await post(`/api/projects/${P.id}/scenes/${sid}/select?cand=${cid}`); render(); };
+const skipScene = async sid => { P = await post(`/api/projects/${P.id}/scenes/${sid}/skip`); render(); };
+
+async function genScript(){
+  const d = prompt('Any direction for the writer? (optional)','') ?? '';
+  P = await post(`/api/projects/${P.id}/script`, {direction:d}); render();
+}
+async function saveScript(){
+  P = await api(`/api/projects/${P.id}/script`,
+    {method:'PUT', body: JSON.stringify({script: $('#script').value})});
+  render();
+}
+async function storyboard(){
+  const n = parseInt($('#nscenes').value||'0',10);
+  P = await post(`/api/projects/${P.id}/storyboard`, {scenes:n}); render();
+}
+async function researchAll(){ await post(`/api/projects/${P.id}/research`, {}); watch(); }
+async function researchOne(sid){ P = await post(`/api/projects/${P.id}/research`, {scene:sid}); render(); }
+async function researchQuery(sid){
+  const q = prompt('Search the web for…'); if(!q) return;
+  P = await post(`/api/projects/${P.id}/research`, {scene:sid, query:q}); render();
+}
+async function replan(sid){
+  const d = prompt('What do you want instead?'); if(d===null) return;
+  P = await post(`/api/projects/${P.id}/scenes/${sid}/replan`, {prompt:d}); render();
+}
+async function genImage(sid){
+  const s = P.scenes.find(x=>x.id===sid);
+  const p = prompt('Image prompt (edit before generating):', s.image_prompt||s.visual_concept||'');
+  if(p===null) return;
+  await post(`/api/projects/${P.id}/scenes/${sid}/generate`, {prompt:p}); watch();
+}
+function uploadFor(sid){
+  const i = document.createElement('input');
+  i.type='file'; i.accept='image/*';
+  i.onchange = async () => {
+    const fd = new FormData(); fd.append('file', i.files[0]);
+    const r = await fetch(`/api/projects/${P.id}/scenes/${sid}/upload`, {method:'POST', body:fd});
+    P = await r.json(); render();
+  };
+  i.click();
+}
+async function narrate(){ await post(`/api/projects/${P.id}/narrate`, {}); watch(); }
+async function build(final){ await post(`/api/projects/${P.id}/render`, {final}); watch(); }
+
+let WATCH=null;
+function watch(){ if(WATCH) return; WATCH = setInterval(async ()=>{
+  const {jobs} = await api('/api/jobs');
+  const running = jobs.filter(j=>j.state==='running');
+  if(!running.length){ clearInterval(WATCH); WATCH=null; await reload(); }
+}, 2500); }
+
+async function pollJobs(){
+  setInterval(async ()=>{
+    const {jobs} = await api('/api/jobs');
+    const r = jobs.filter(j=>j.state==='running');
+    const e = jobs.filter(j=>j.state==='error').slice(-1)[0];
+    $('#jobs').innerHTML = r.length
+      ? `⏳ ${r.map(j=>j.name).join(', ')}`
+      : (e ? `<span class="err">✗ ${e.name}: ${e.error.slice(0,90)}</span>` : '');
+  }, 2000);
+}
+boot();
+</script>
+</body>
+</html>

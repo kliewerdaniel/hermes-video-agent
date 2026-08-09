@@ -1,0 +1,38 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# ---- Secrets & local config (NEVER commit) ----
+inference.json
+.env
+*.local.json
+
+# ---- Generated media (large; not source) ----
+projects/
+vox_voices/
+*.wav
+*.mp3
+*.mp4
+*.flac
+*.m4a
+*.ogg
+*.aac
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Node / Next.js ----
+webapp/node_modules/
+webapp/.next/
+webapp/out/
+webapp/.swc/
+npm-debug.log*

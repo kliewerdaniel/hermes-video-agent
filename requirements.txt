@@ -1,0 +1,27 @@
+# Hermes Video Agent — Python backend (package: hva)
+#
+# Runtime interpreter: Python 3.12+ (developed and tested on 3.14).
+# Install into a fresh venv. IMPORTANT: if you run this from an agent/Hermes shell
+# that leaks PYTHONPATH/PYTHONHOME, strip them first:
+#   env -u PYTHONPATH -u PYTHONHOME python3.12 -m venv .venv && source .venv/bin/activate
+
+# Web API + data layer
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+
+# Image research (Openverse API + Wikimedia/Openverse via Playwright)
+requests>=2.31
+playwright>=1.44
+
+# Caption rasterisation + asset handling
+pillow>=10.2
+numpy>=1.26
+
+# Voice cloning (optional, Vox provider — see README "Vox TTS (in-process)")
+# Installed into a SEPARATE venv (HVA_VOX_VENV) that already has mlx-audio;
+# the `vox` provider shells out to that interpreter rather than importing it here.
+# mlx-audio
+# mlx-whisper
+
+# (No torch/transformers here — heavy ML lives in the vox venv or your local LLM.)
