@@ -15,6 +15,8 @@ python -m uvicorn hva.web.app:app --host 127.0.0.1 --port 8777   # backend
 cd webapp && npm run dev                                          # review UI -> http://127.0.0.1:3008
 ```
 
+![Hermes Video Agent demo](demo.gif)
+
 > 📝 **Full build + replication guide (with screenshots):** read the companion
 > blog post — [Building Hermes Video Agent: a local-first, human-in-the-loop
 > video pipeline](https://danielkliewer.com/blog/2026-08-09-hermes-video-agent).
