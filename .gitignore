@@ -36,3 +36,7 @@ webapp/.next/
 webapp/out/
 webapp/.swc/
 npm-debug.log*
+
+# ---- Scratch / leftover agent artifacts ----
+.hermes-tmp.*
+t_scrape.py
